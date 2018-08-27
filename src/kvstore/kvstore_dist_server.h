@@ -39,6 +39,10 @@
 #include "../operator/tensor/elemwise_binary_op-inl.h"
 #include "../operator/tensor/init_op.h"
 //dist_device_sync
+#define _STALE 0
+
+using Staleness = uint64_t;
+using Callback = std::function<void()>;
 
 namespace mxnet {
 namespace kvstore {
@@ -50,7 +54,7 @@ enum class CommandType {
 };
 
 enum class RequestType {
-  kDefaultPushPull, kRowSparsePushPull, kCompressedPushPull
+  kDefaultPushPull, kRowSparsePushPull, kCompressedPushPull//, SSPDefaultPushPull
 };
 
 struct DataHandleType {
@@ -163,6 +167,7 @@ class KVStoreDistServer {
     ps_server_->set_request_handle(
         std::bind(&KVStoreDistServer::DataHandleEx, this, _1, _2, _3));
     sync_mode_ = false;
+    stale = _STALE; //inital is
     gradient_compression_ = std::make_shared<GradientCompression>();
     log_verbose_ = dmlc::GetEnv("MXNET_KVSTORE_DIST_ROW_SPARSE_VERBOSE", false);
   }
@@ -172,12 +177,12 @@ class KVStoreDistServer {
     delete ps_server_;
   }
 
-  void set_controller(const KVStore::Controller& controller) {
+  void set_controller(const KVStore::Controller& controller) { //Usually None
     CHECK(controller);
     controller_ = controller;
   }
 
-  void set_updater(const KVStore::Updater& updater)  {
+  void set_updater(const KVStore::Updater& updater)  { //Usually fixed
     CHECK(updater);
     updater_ = updater;
   }
@@ -205,6 +210,13 @@ class KVStoreDistServer {
         break;
       case CommandType::kSyncMode:
         sync_mode_ = true;
+        //Xin YAO
+        std::string tmp_s = static_cast<std::string>(recved.body);
+        _STALE = 0;
+        for(int i=9; i<tmp_s.length(); i++){ //reading the staleness
+        	_STALE *= 10;
+        	_STALE += (tmp_s[i] - '0');
+        }
         break;
       case CommandType::kSetGradientCompression:
         gradient_compression_->DecodeParams(recved.body);
@@ -335,8 +347,12 @@ class KVStoreDistServer {
         DataHandleCompressed(type, req_meta, req_data, server);
         break;
       case RequestType::kDefaultPushPull:
-        DataHandleDefault(type, req_meta, req_data, server);
+    	stale == _STALE ? DataHandleDefault(type, req_meta, req_data, server):SSPDataHandleDefault(type, req_meta, req_data, server);
         break;
+      //Xin Yao
+      //case RequestType::SSPDefaultPushPull:
+
+    	//break;
     }
   }
 
@@ -600,6 +616,53 @@ class KVStoreDistServer {
     server->Response(req_meta, response);
   }
 
+  //SSP Xin Yao
+  void SSPDefaultStorageResponse(const DataHandleType type,
+                                const int key,
+                                const ps::KVMeta& req_meta,
+                                const ps::KVPairs<char> &req_data,
+                                ps::KVServer<char>* server) {
+      ps::KVPairs<char> response;
+      int current_iter = req_meta.staleness;
+      /*
+      * SSP condition
+      * the slowest one + _STALE <= current_iter
+      * we can not pull data until
+      */
+      if (ticks[key] + stale <= current_iter) { // Wait
+    	  //wait for the slow workers catch up
+    	  callbacks_[ticks[key]].push_back(
+    			  [this, key, req_meta, req_data, response, server]() mutable {
+    		  const NDArray& stored = store_[key];
+    		  CHECK(!stored.is_none()) << "init " << key << " first";
+
+    		  // as server returns when store_realt is ready in this case
+    		  if (has_multi_precision_copy(type)) stored.WaitToRead();
+
+    		  auto len = stored.shape().Size() * mshadow::mshadow_sizeof(stored.dtype());
+    		  response.keys = req_data.keys;
+    		  response.lens = {len};
+    		  // TODO(mli) try to remove this CopyFrom
+    		  response.vals.CopyFrom(static_cast<const char*>(stored.data().dptr_), len);
+    		  server->Response(req_meta, response);
+    	  });
+    	  return;
+      }
+
+      const NDArray& stored = store_[key];
+      CHECK(!stored.is_none()) << "init " << key << " first";
+
+      // as server returns when store_realt is ready in this case
+      if (has_multi_precision_copy(type)) stored.WaitToRead();
+
+      auto len = stored.shape().Size() * mshadow::mshadow_sizeof(stored.dtype());
+      response.keys = req_data.keys;
+      response.lens = {len};
+      // TODO(mli) try to remove this CopyFrom
+      response.vals.CopyFrom(static_cast<const char*>(stored.data().dptr_), len);
+      server->Response(req_meta, response);
+    }
+
   void DataHandleCompressed(const DataHandleType type,
                             const ps::KVMeta& req_meta,
                             const ps::KVPairs<char> &req_data,
@@ -740,6 +803,89 @@ class KVStoreDistServer {
     }
   }
 
+  //SSP Xin Yao
+  void SSPDataHandleDefault(const DataHandleType type, const ps::KVMeta& req_meta,
+                           const ps::KVPairs<char> &req_data,
+                           ps::KVServer<char>* server) {
+      // do some check
+      CHECK_EQ(req_data.keys.size(), (size_t)1);
+      if (req_meta.push) {
+        CHECK_EQ(req_data.lens.size(), (size_t)1);
+        CHECK_EQ(req_data.vals.size(), (size_t)req_data.lens[0]);
+      }
+      int key = DecodeKey(req_data.keys[0]);
+	  int current_iter = req_meta.staleness;
+      auto& stored = has_multi_precision_copy(type) ? store_realt_[key] : store_[key];
+      // there used several WaitToRead, this is because \a recved's memory
+      // could be deallocated when this function returns. so we need to make sure
+      // the operators with \a NDArray are actually finished
+      if (req_meta.push) {
+        size_t ds[] = {(size_t) req_data.lens[0] / mshadow::mshadow_sizeof(type.dtype)};
+        TShape dshape(ds, ds + 1);
+        TBlob recv_blob;
+        MSHADOW_REAL_TYPE_SWITCH(type.dtype, DType, {
+          recv_blob = TBlob(reinterpret_cast<DType*>(req_data.vals.data()), dshape, cpu::kDevMask);
+        })
+        NDArray recved = NDArray(recv_blob, 0);
+        if (stored.is_none()) {
+          // initialization
+          stored = NDArray(dshape, Context(), false,
+                           has_multi_precision_copy(type) ? mshadow::kFloat32 : type.dtype);
+          CopyFromTo(recved, &stored, 0); //finished push
+          server->Response(req_meta); //response push to workers
+          if (has_multi_precision_copy(type)) {
+            auto& stored_dtype = store_[key];
+            stored_dtype = NDArray(dshape, Context(), false, type.dtype);
+            CopyFromTo(stored, stored_dtype);
+            stored_dtype.WaitToRead();
+          }
+          stored.WaitToRead(); // After wait to read
+        } else {
+          auto &updates = update_buf_[key];
+          if (sync_mode_ && updates.merged.is_none()) {
+            updates.merged = NDArray(dshape, Context(), false,
+                                     has_multi_precision_copy(type) ? mshadow::kFloat32 : type.dtype);
+          }
+          if (has_multi_precision_copy(type) && updates.temp_array.is_none()) {
+            updates.temp_array = NDArray(dshape, Context(), false, mshadow::kFloat32);
+          }
+          if (updates.request.empty()) {
+            if (sync_mode_) {
+              CopyFromTo(recved, updates.merged);
+            } else {
+              if (has_multi_precision_copy(type)) {
+                CopyFromTo(recved, updates.temp_array);
+              } else {
+                updates.temp_array = recved;
+              }
+            }
+          } else {
+            CHECK(sync_mode_);
+            if (has_multi_precision_copy(type)) {
+              CopyFromTo(recved, updates.temp_array);
+              updates.merged += updates.temp_array;
+            } else {
+              updates.merged += recved;
+            }
+          }
+          updates.request.push_back(req_meta);
+          ApplyUpdates(type, key, &updates, server); //response push to workers
+        }
+        //Xin Yao
+        workercount[current_iter] += 1; // For this iteration, add it for each push
+        while (workercount[ticks[key]] == ps::NumWorkers()) { // For a given key, if the staleness has been passed number of workers, add one
+      	  //trigger a cb of pull
+      	  auto& cbs = callbacks_[ticks[key]];
+      	  for (const auto& cb : cbs) {
+      		  cb();
+      	  }
+      	  ticks[key] += 1;
+        }
+      } else {
+        SSPDefaultStorageResponse(type, key, req_meta, req_data, server);
+      }
+    }
+
   int DecodeKey(ps::Key key) {
     auto kr = ps::Postoffice::Get()->GetServerKeyRanges()[ps::MyRank()];
     return key - kr.begin();
@@ -750,6 +896,7 @@ class KVStoreDistServer {
    * \brief user defined mode for push
    */
   bool sync_mode_;
+  int stale; //let us see it
   KVStore::Controller controller_;
   KVStore::Updater updater_;
 
@@ -758,6 +905,13 @@ class KVStoreDistServer {
    */
   std::unordered_map<int, NDArray> store_;
   std::unordered_map<int, NDArray> store_realt_;
+
+  /**
+   * SSP controller
+   */
+  std::unordered_map<int, Staleness> ticks;
+  std::unordered_map<Staleness, int> workercount;
+  std::unordered_map<Staleness, std::vector<Callback>> callbacks_;
 
   /**
    * \brief merge_buf_ is a buffer used if sync_mode is true. It represents

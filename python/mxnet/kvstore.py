@@ -91,8 +91,11 @@ def _get_kvstore_server_command_type(command):
                      'kSyncMode': 3,
                      'kSetGradientCompression': 4,
                      'kSetProfilerParams': 5}
-    assert (command in command_types), "Unknown command type to send to server"
-    return command_types[command]
+    assert (command in command_types or command.contain(command_types['kSyncMode'])), "Unknown command type to send to server"
+    if command in command_types: # normal return
+        return command_types[command]
+    else: # return SSP
+        return {command: 3}[0]
 
 class KVStore(object):
     """A key-value store for synchronization of values, over multiple devices."""
