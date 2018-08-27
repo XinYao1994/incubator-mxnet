@@ -1964,6 +1964,12 @@ MXNET_DLL int MXKVStorePush(KVStoreHandle handle,
                             const int* keys,
                             NDArrayHandle* vals,
                             int priority);
+MXNET_DLL int MXKVStoreSPush(KVStoreHandle handle,
+                            mx_uint num,
+                            const int* keys,
+                            NDArrayHandle* vals,
+                            int staleness,
+                            int priority);
 /*!
  * \brief Push a list of (key,value) pairs to kvstore, where each key is a string
  * \param handle handle to the kvstore
@@ -1977,6 +1983,12 @@ MXNET_DLL int MXKVStorePushEx(KVStoreHandle handle,
                               mx_uint num,
                               const char** keys,
                               NDArrayHandle* vals,
+                              int priority);
+MXNET_DLL int MXKVStoreSPushEx(KVStoreHandle handle,
+                              mx_uint num,
+                              const char** keys,
+                              NDArrayHandle* vals,
+                              int staleness,
                               int priority);
 /*!
  * \brief pull a list of (key, value) pairs from the kvstore
@@ -2024,6 +2036,12 @@ MXNET_DLL int MXKVStorePull(KVStoreHandle handle,
                             const int* keys,
                             NDArrayHandle* vals,
                             int priority);
+MXNET_DLL int MXKVStoreSPull(KVStoreHandle handle,
+                            mx_uint num,
+                            const int* keys,
+                            NDArrayHandle* vals,
+                            int staleness,
+                            int priority);
 /*!
  * \brief pull a list of (key, value) pairs from the kvstore, where each key is a string
  * \param handle handle to the kvstore
@@ -2037,6 +2055,13 @@ MXNET_DLL int MXKVStorePullEx(KVStoreHandle handle,
                               mx_uint num,
                               const char** keys,
                               NDArrayHandle* vals,
+                              int priority);
+
+MXNET_DLL int MXKVStoreSPullEx(KVStoreHandle handle,
+                              mx_uint num,
+                              const char** keys,
+                              NDArrayHandle* vals,
+                              int staleness,
                               int priority);
 
 /*!

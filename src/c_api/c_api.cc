@@ -848,6 +848,23 @@ int MXKVStorePush(KVStoreHandle handle,
   static_cast<KVStore*>(handle)->Push(v_keys, v_vals, priority);
   API_END();
 }
+//Xin Yao
+int MXKVStoreSPush(KVStoreHandle handle,
+                  mx_uint num,
+                  const int* keys,
+                  NDArrayHandle* vals,
+                  int staleness,
+                  int priority) {
+  API_BEGIN();
+  std::vector<int> v_keys(num);
+  std::vector<NDArray> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = *static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->SPush(v_keys, v_vals, staleness, priority);
+  API_END();
+}
 
 int MXKVStorePushEx(KVStoreHandle handle,
                   mx_uint num,
@@ -862,6 +879,23 @@ int MXKVStorePushEx(KVStoreHandle handle,
     v_vals[i] = *static_cast<NDArray*>(vals[i]);
   }
   static_cast<KVStore*>(handle)->Push(v_keys, v_vals, priority);
+  API_END();
+}
+//Xin YAO
+int MXKVStoreSPushEx(KVStoreHandle handle,
+                  mx_uint num,
+                  const char** keys,
+                  NDArrayHandle* vals,
+                  int staleness,
+                  int priority) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
+  std::vector<NDArray> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = *static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->SPush(v_keys, v_vals, staleness, priority);
   API_END();
 }
 
@@ -881,6 +915,24 @@ int MXKVStorePull(KVStoreHandle handle,
   API_END();
 }
 
+//Xin YAO
+int MXKVStoreSPull(KVStoreHandle handle,
+                  mx_uint num,
+                  const int* keys,
+                  NDArrayHandle* vals,
+                  int staleness,
+                  int priority) {
+  API_BEGIN();
+  std::vector<int> v_keys(num);
+  std::vector<NDArray*> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->SPull(v_keys, v_vals, staleness, priority, true);
+  API_END();
+}
+
 int MXKVStorePullEx(KVStoreHandle handle,
                     mx_uint num,
                     const char** keys,
@@ -897,6 +949,25 @@ int MXKVStorePullEx(KVStoreHandle handle,
   API_END();
 }
 
+//Xin Yao
+int MXKVStoreSPullEx(KVStoreHandle handle,
+                    mx_uint num,
+                    const char** keys,
+                    NDArrayHandle* vals,
+                    int staleness,
+                    int priority) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
+  std::vector<NDArray*> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->SPull(v_keys, v_vals, staleness, priority, true);
+  API_END();
+}
+
+//Xin YAO, waiting for update.
 int MXKVStorePullWithSparse(KVStoreHandle handle,
                             mx_uint num,
                             const int* keys,

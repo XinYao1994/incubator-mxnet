@@ -41,10 +41,15 @@ class KVStore {
   static void Init(int key, const NDArray& val);
   static void Init(const std::vector<int>& keys, const std::vector<NDArray>& vals);
   static void Push(int key, const NDArray& val, int priority = 0);
+  static void Push(int key, const NDArray& val, int staleness, int priority = 0);
   static void Push(const std::vector<int>& keys,
       const std::vector<NDArray>& vals, int priority = 0);
+  static void Push(const std::vector<int>& keys,
+      const std::vector<NDArray>& vals, int staleness, int priority = 0);
   static void Pull(int key, NDArray* out, int priority = 0);
+  static void Pull(int key, NDArray* out, int staleness, int priority = 0);
   static void Pull(const std::vector<int>& keys, std::vector<NDArray>* outs, int priority = 0);
+  static void Pull(const std::vector<int>& keys, std::vector<NDArray>* outs, int staleness, int priority = 0);
   // TODO(lx): put lr in optimizer or not?
   static void SetOptimizer(std::unique_ptr<Optimizer> optimizer, bool local = false);
   static std::string GetType();

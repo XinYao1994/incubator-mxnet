@@ -121,6 +121,14 @@ class KVStoreLocal : public KVStore {
     PushImpl(keys, values, priority);
   }
 
+  void SPush(const std::vector<int>& keys,
+              const std::vector<NDArray>& values,
+              int staleness,
+              int priority) override {
+      SetKeyType(kIntKey);
+      PushImpl(keys, values, priority);
+  }// waiting Xin Yao
+
   void Pull(const std::vector<int>& keys,
             const std::vector<NDArray*>& values,
             int priority,
@@ -128,6 +136,15 @@ class KVStoreLocal : public KVStore {
     SetKeyType(kIntKey);
     PullImpl(keys, values, priority, ignore_sparse);
   }
+
+  void SPull(const std::vector<int>& keys,
+              const std::vector<NDArray*>& values,
+              int staleness,
+              int priority,
+              bool ignore_sparse) override {
+      SetKeyType(kIntKey);
+      PullImpl(keys, values, priority, ignore_sparse);
+  }// waiting Xin Yao
 
   void PullRowSparse(const std::vector<int>& keys,
                      const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,
@@ -145,6 +162,16 @@ class KVStoreLocal : public KVStore {
     PushImpl(keys, values, priority);
   }
 
+  void SPush(const std::vector<std::string>& str_keys,
+              const std::vector<NDArray>& values,
+              int staleness,
+              int priority) override {
+      SetKeyType(kStringKey);
+      std::vector<int> keys(str_keys.size());
+      LookupKeys(str_keys, &keys);
+      PushImpl(keys, values, priority);
+    }// waiting Xin Yao
+
   void Pull(const std::vector<std::string>& str_keys,
             const std::vector<NDArray*>& values,
             int priority,
@@ -154,6 +181,17 @@ class KVStoreLocal : public KVStore {
     LookupKeys(str_keys, &keys);
     PullImpl(keys, values, priority, ignore_sparse);
   }
+
+  void SPull(const std::vector<std::string>& str_keys,
+              const std::vector<NDArray*>& values,
+              int staleness,
+              int priority,
+              bool ignore_sparse) override {
+      SetKeyType(kStringKey);
+      std::vector<int> keys(str_keys.size());
+      LookupKeys(str_keys, &keys);
+      PullImpl(keys, values, priority, ignore_sparse);
+    }// waiting Xin Yao
 
   void PullRowSparse(const std::vector<std::string>& str_keys,
                      const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,

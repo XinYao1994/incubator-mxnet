@@ -151,6 +151,10 @@ class KVStore {
                     const std::vector<NDArray>& values,
                     int priority = 0)  = 0;
 
+  virtual void SPush(const std::vector<int>& keys,
+                    const std::vector<NDArray>& values,
+                    int staleness = 0,
+                    int priority = 0)  = 0;
   /*!
    * \brief push a list of key-value pairs into the store
    * \param keys the list of keys in string format
@@ -159,6 +163,11 @@ class KVStore {
    */
   virtual void Push(const std::vector<std::string>& str_keys,
                     const std::vector<NDArray>& values,
+                    int priority = 0)  = 0;
+
+  virtual void SPush(const std::vector<std::string>& str_keys,
+                    const std::vector<NDArray>& values,
+                    int staleness = 0,
                     int priority = 0)  = 0;
   /*!
    * \brief pull a list of key-value pairs from the store
@@ -187,6 +196,11 @@ class KVStore {
   virtual void Pull(const std::vector<int>& keys,
                     const std::vector<NDArray*>& values,
                     int priority = 0, bool ignore_sparse = true) = 0;
+
+  virtual void SPull(const std::vector<int>& keys,
+                    const std::vector<NDArray*>& values,
+                    int staleness = 0,
+                    int priority = 0, bool ignore_sparse = true) = 0;
   /*!
    * \brief pull a list of key-value pairs from the store
    * \param keys the list of keys in string format
@@ -196,6 +210,11 @@ class KVStore {
    */
   virtual void Pull(const std::vector<std::string>& str_keys,
                     const std::vector<NDArray*>& values,
+                    int priority = 0, bool ignore_sparse = true) = 0;
+
+  virtual void SPull(const std::vector<std::string>& str_keys,
+                    const std::vector<NDArray*>& values,
+                    int staleness = 0,
                     int priority = 0, bool ignore_sparse = true) = 0;
 
   /*!

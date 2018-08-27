@@ -104,6 +104,11 @@ inline void KVStore::Push(int key, const NDArray& val, int priority) {
   CHECK_EQ(MXKVStorePush(get_kvstore()->get_handle(), 1, &key, &val_handle, priority), 0);
 }
 
+inline void KVStore::Push(int key, const NDArray& val, int staleness, int priority) {
+  NDArrayHandle val_handle = val.GetHandle();
+  CHECK_EQ(MXKVStorePush(get_kvstore()->get_handle(), 1, &key, &val_handle, priority), 0); // waiting Xin Yao
+}
+
 inline void KVStore::Push(const std::vector<int>& keys,
                           const std::vector<NDArray>& vals,
                           int priority) {
@@ -118,10 +123,31 @@ inline void KVStore::Push(const std::vector<int>& keys,
       val_handles.data(), priority), 0);
 }
 
+inline void KVStore::Push(const std::vector<int>& keys,
+                          const std::vector<NDArray>& vals,
+                          int staleness,
+                          int priority) {
+  CHECK_EQ(keys.size(), vals.size());
+  std::vector<NDArrayHandle> val_handles(vals.size());
+  std::transform(vals.cbegin(), vals.cend(), val_handles.begin(),
+      [](const NDArray& val) {
+        return val.GetHandle();
+      });
+
+  CHECK_EQ(MXKVStorePush(get_kvstore()->get_handle(), keys.size(), keys.data(),
+      val_handles.data(), priority), 0); // waiting Xin YAO
+}
+
 inline void KVStore::Pull(int key, NDArray* out, int priority) {
   NDArrayHandle out_handle = out->GetHandle();
   CHECK_EQ(MXKVStorePull(get_kvstore()->get_handle(), 1, &key, &out_handle, priority), 0);
 }
+
+inline void KVStore::Pull(int key, NDArray* out, int staleness, int priority) {
+  NDArrayHandle out_handle = out->GetHandle();
+  CHECK_EQ(MXKVStorePull(get_kvstore()->get_handle(), 1, &key, &out_handle, priority), 0); // waiting Xin Yao
+}
+
 
 inline void KVStore::Pull(const std::vector<int>& keys, std::vector<NDArray>* outs, int priority) {
   CHECK_EQ(keys.size(), outs->size());
@@ -134,6 +160,19 @@ inline void KVStore::Pull(const std::vector<int>& keys, std::vector<NDArray>* ou
 
   CHECK_EQ(MXKVStorePull(get_kvstore()->get_handle(), keys.size(), keys.data(),
       out_handles.data(), priority), 0);
+}
+
+inline void KVStore::Pull(const std::vector<int>& keys, std::vector<NDArray>* outs, int staleness, int priority) {
+  CHECK_EQ(keys.size(), outs->size());
+
+  std::vector<NDArrayHandle> out_handles(keys.size());
+  std::transform(outs->cbegin(), outs->cend(), out_handles.begin(),
+      [](const NDArray& val) {
+        return val.GetHandle();
+      });
+
+  CHECK_EQ(MXKVStorePull(get_kvstore()->get_handle(), keys.size(), keys.data(),
+      out_handles.data(), priority), 0); // waiting Xin Yao
 }
 
 inline void KVStore::Updater(int key, NDArrayHandle recv, NDArrayHandle local,

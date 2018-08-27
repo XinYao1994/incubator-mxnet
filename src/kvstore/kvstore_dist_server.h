@@ -38,6 +38,7 @@
 #include "../profiler/profiler.h"
 #include "../operator/tensor/elemwise_binary_op-inl.h"
 #include "../operator/tensor/init_op.h"
+//dist_device_sync
 
 namespace mxnet {
 namespace kvstore {
